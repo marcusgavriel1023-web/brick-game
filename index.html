@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Brick Game</title>
+<meta name="description" content="Play my awesome browser game online for free">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      background: black;
+      color: white;
+      text-align: center;
+      font-family: sans-serif;
+  margin-bottom: 0px;
+margin-top: 0px;
+    }
+
+    canvas {
+      background: #111;
+      border: 2px solid white;
+      margin-top: 0px;
+  margin-bottom: 1px;
+	
+    }
+
+    button {
+      padding: 20px;
+      margin: 10px;
+      font-size: 28px;
+ margin-bottom: 5px;
+margin-top: 0px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Brick Game</h2>
+<h3>Score: <span id="score">0</span></h3>
+<h3>Level: <span id="level">1</span></h3>
+
+
+<div>
+ <button onclick="start()">Start</button>
+  <button onclick="moveLeft()">⬅</button>
+  <button onclick="moveRight()">➡</button>
+  <button onclick="moveDown()">⬇</button>
+  <button onclick="rotate()">o</button>
+  <button onclick="pause()">Pause</button>
+  <button onclick="reset()">Reset</button>
+
+</div>
+
+<canvas id="game" width="200" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const grid = 20;
+const rows = 20;
+const cols = 10;
+
+let board = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+let piece;
+let gameOver = false;
+let isPaused = false;
+let dropCounter = 0;
+let dropInterval = 500;
+let lastTime = 0;
+let score = 0;
+let level = 1;
+
+// === PIECES ===
+const shapes = [
+  [[1,1],[1,1]], // square
+  [[1,1,1,1]],   // line
+  [[1,1,1],[0,1,0]],// T
+  [[0,1,1],[1,1,0]],// S
+  [[1,1],[0,1]],//L
+ [[1,1,1,1],[1,1,1,1]],   // 2lane
+ [[1,1,1],[0,0,1]]//Big L
+];
+
+// === SPAWN ===
+function spawnPiece() {
+  const shape = shapes[Math.floor(Math.random() * shapes.length)];
+
+  piece = {
+    x: Math.floor(cols / 2) - 1,
+    y: 0,
+    shape: shape
+  };
+
+  if (collision()) {
+    gameOver = true;
+    alert("Game Over!");
+  }
+}
+
+// === DRAW ===
+function drawSquare(x, y, color="cyan") {
+  ctx.fillStyle = color;
+  ctx.fillRect(x * grid, y * grid, grid, grid);
+  ctx.strokeStyle = "#222";
+  ctx.strokeRect(x * grid, y * grid, grid, grid);
+
+
+}
+
+function drawBoard() {
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (board[r][c]) drawSquare(c, r);
+
+    }
+  }
+}
+
+function drawPiece() {
+  for (let r = 0; r < piece.shape.length; r++) {
+    for (let c = 0; c < piece.shape[r].length; c++) {
+      if (piece.shape[r][c]) {
+        drawSquare(piece.x + c, piece.y + r);
+      }
+    }
+  }
+}
+function updateUI() {
+  document.getElementById("score").innerText = score;
+  document.getElementById("level").innerText = level;
+}
+function pause() {
+  isPaused = !isPaused;
+
+  if (!isPaused) {
+    requestAnimationFrame(update); // resume loop
+  }
+}
+//Rotate 
+function rotate() {
+  let newShape = [];
+
+  for (let c = 0; c < piece.shape[0].length; c++) {
+    newShape[c] = [];
+    for (let r = piece.shape.length - 1; r >= 0; r--) {
+      newShape[c].push(piece.shape[r][c]);
+    }
+  }
+
+  piece.shape = newShape;
+}
+// === COLLISION ===
+function collision(offsetX = 0, offsetY = 0) {
+  for (let r = 0; r < piece.shape.length; r++) {
+    for (let c = 0; c < piece.shape[r].length; c++) {
+      if (piece.shape[r][c]) {
+        let x = piece.x + c + offsetX;
+        let y = piece.y + r + offsetY;
+
+        if (
+          x < 0 ||
+          x >= cols ||
+          y >= rows ||
+          (board[y] && board[y][x])
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// === LOCK PIECE ===
+function lockPiece() {
+  for (let r = 0; r < piece.shape.length; r++) {
+    for (let c = 0; c < piece.shape[r].length; c++) {
+      if (piece.shape[r][c]) {
+        board[piece.y + r][piece.x + c] = 1;
+      }
+    }
+  }
+}
+
+// === CLEAR LINES ===
+function clearLines() {
+  for (let r = rows - 1; r >= 0; r--) {
+    if (board[r].every(cell => cell)) {
+      board.splice(r, 1);
+      board.unshift(Array(cols).fill(0));
+      r++;
+
+      // ⭐ ADD SCORE
+      score += 10;
+updateLevel();
+updateUI();
+    }
+  }
+}
+function updateLevel() {
+  level = Math.floor(score / 100) + 1;
+
+  // speed up the game
+  dropInterval = Math.max(100, 500 - (level - 1) * 50);
+
+}
+// === CONTROLS ===
+function moveLeft() {
+  if (!collision(-1, 0)) piece.x--;
+}
+
+function moveRight() {
+  if (!collision(1, 0)) piece.x++;
+}
+
+function moveDown() {
+  if (!collision(0, 1)) piece.y++;
+}
+
+// keyboard
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft") moveLeft();
+  if (e.key === "ArrowRight") moveRight();
+  if (e.key === "ArrowDown") moveDown();
+});
+
+// === GAME LOOP ===
+function update(time = 0) {
+  if (gameOver || isPaused) return;
+
+  const delta = time - lastTime;
+  lastTime = time;
+  dropCounter += delta;
+
+  if (dropCounter > dropInterval) {
+    if (!collision(0, 1)) {
+      piece.y++;
+    } else {
+      lockPiece();
+      spawnPiece();
+      clearLines();
+    }
+    dropCounter = 0;
+  }
+
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+ 
+
+  
+drawBoard();
+  drawPiece();
+
+  requestAnimationFrame(update);
+}
+//Reset
+function reset() 
+{ 
+board = Array.from({ length: rows }, () => Array(cols).fill(0)); 
+score = 0; level = 1; 
+dropInterval = 500; 
+gameOver = false; 
+dropCounter = 0; lastTime = 0; 
+spawnPiece(); 
+
+}
+
+function start() {
+  reset();
+  updateUI();
+  requestAnimationFrame(update);
+}
+
+</script>
+
+</body>
+</html>
